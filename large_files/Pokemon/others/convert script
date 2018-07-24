@@ -1,0 +1,4 @@
+script
+conver .png to .jpg
+
+mkdir jpegs; sips -s format jpeg *.* --out jpegs
