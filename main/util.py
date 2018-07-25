@@ -13,6 +13,9 @@ def sort_pokemon(target):
   
   DESTINATION = '../large_files/Pokemon/train/'
   
+  if not os.path.exists(DESTINATION):
+    os.mkdir(DESTINATION)
+  
   #clear train folder
   for file in os.listdir(DESTINATION):
     if file.endswith('.jpg'):
