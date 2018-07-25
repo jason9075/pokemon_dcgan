@@ -12,9 +12,9 @@ from datetime import datetime
 # some constants
 LEARNING_RATE = 0.002
 BETA1 = 0.5
-BATCH_SIZE = 89
-EPOCHS = 1000
-SAVE_SAMPLE_PERIOD = 5
+BATCH_SIZE = 45
+EPOCHS = 500
+SAVE_SAMPLE_PERIOD = 100
 
 
 # make dir to save samples
