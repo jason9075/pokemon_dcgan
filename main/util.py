@@ -7,7 +7,7 @@ import shutil
 import glob
 from scipy.misc import imread, imsave, imresize
 
-def sort_pokemon(target):
+def filter_pokemon(target):
   if not os.path.exists('../large_files'):
     print("You must create a folder called large_files adjacent to the class folder first.")
   
@@ -64,6 +64,3 @@ def resize(inputfile, outputdir):
 
   filename = inputfile.split('/')[-1]
   imsave("%s/%s" % (outputdir, filename), small)
-
-def files2raw_images(filenames):
-  return [imread(fn) for fn in filenames]

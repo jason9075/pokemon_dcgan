@@ -25,19 +25,16 @@ def scale_image(im):
   # scale to (-1, +1)
   return (tf.cast(im, tf.float32)/255)*2 - 1
   
-def preprocessing(datas, dims):
-  for idx, file in enumerate(datas):
-    distorted_image = tf.image.decode_jpeg(tf.read_file(file), channels=3)
-    distorted_image = tf.image.resize_image_with_crop_or_pad(distorted_image, dims, dims)
-    distorted_image = tf.image.random_flip_left_right(distorted_image)
-    distorted_image = tf.image.random_brightness(distorted_image, max_delta=0.3)
-    #distorted_image = tf.image.adjust_brightness(distorted_image, delta=0.01)
-    distorted_image = tf.image.random_contrast(distorted_image, lower=0.9, upper=1.1)
-    #distorted_image = tf.image.adjust_contrast(distorted_image, contrast_factor=1.1)
-
-    datas[idx] = scale_image(distorted_image)
+def preprocessing(value, ch ,dims):
+  distorted_images = tf.image.decode_jpeg(value, channels=ch)
+  distorted_images = tf.image.resize_image_with_crop_or_pad(distorted_images, dims, dims)
+  distorted_images = tf.image.random_flip_left_right(distorted_images)
+  distorted_images = tf.image.random_brightness(distorted_images, max_delta=0.3)
+  #distorted_images = tf.image.adjust_brightness(distorted_images, delta=0.01)
+  distorted_images = tf.image.random_contrast(distorted_images, lower=0.9, upper=1.1)
+  #distorted_images = tf.image.adjust_contrast(distorted_images, contrast_factor=1.1)
     
-  return datas
+  return scale_image(distorted_images)
 
 def lrelu(x, alpha=0.2):
   return tf.maximum(alpha*x, x)
@@ -177,19 +174,15 @@ class DenseLayer(object):
 
 
 class DCGAN:
-  def __init__(self, img_length, num_colors, d_sizes, g_sizes):
+  def __init__(self, files, img_length, num_colors, d_sizes, g_sizes):
 
     # save for later
+    self.N = len(files)
     self.img_length = img_length
     self.num_colors = num_colors
     self.latent_dims = g_sizes['z']
 
     # define the input data
-    self.X = tf.placeholder(
-      tf.float32,
-      shape=(None, img_length, img_length, num_colors),
-      name='X'
-    )
     self.Z = tf.placeholder(
       tf.float32,
       shape=(None, self.latent_dims),
@@ -201,6 +194,18 @@ class DCGAN:
     # to pass in output_shape
     # we need only pass in the batch size via feed_dict
     self.batch_sz = tf.placeholder(tf.int32, shape=(), name='batch_sz')
+
+
+    filename_queue = tf.train.string_input_producer(files)
+    reader = tf.WholeFileReader()
+    key, value = reader.read(filename_queue)
+    images = preprocessing(value, self.num_colors, self.img_length)
+    self.X = tf.train.shuffle_batch([images], 
+                                        batch_size=self.batch_sz, 
+                                        capacity=2000,
+                                        allow_smaller_final_batch=True,
+                                        min_after_dequeue=50)
+
 
     # build the discriminator
     logits = self.build_discriminator(self.X, d_sizes)
@@ -416,29 +421,27 @@ class DCGAN:
     return output
 
 
-  def fit(self, X):
+  def fit(self):
     d_costs = []
     g_costs = []
 
-    N = len(X)
-    n_batches = N // BATCH_SIZE
+    n_batches = self.N // BATCH_SIZE
     total_iters = 0
+    
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(sess=self.sess, coord=coord)
+    
     for i in range(EPOCHS):
       print("epoch:", i)
-      np.random.shuffle(X)
       for j in range(n_batches):
         t0 = datetime.now()
-        
+
         Z = np.random.uniform(-1, 1, size=(BATCH_SIZE, self.latent_dims))
-        
-        paths = X[j*BATCH_SIZE:(j+1)*BATCH_SIZE]
-        batch = preprocessing(paths, self.img_length)
-        batch = self.sess.run(batch)
         
         # train the discriminator
         _, d_cost, d_acc = self.sess.run(
           (self.d_train_op, self.d_cost, self.d_accuracy),
-          feed_dict={self.X: batch, self.Z: Z, self.batch_sz: BATCH_SIZE},
+          feed_dict={self.Z: Z, self.batch_sz: BATCH_SIZE},
         )
         d_costs.append(d_cost)
 
@@ -481,6 +484,8 @@ class DCGAN:
             'samples/samples_at_iter_%d.png' % total_iters,
             flat_image,
           )
+          
+    coord.join(threads)
 
     # save a plot of the costs
     plt.clf()
@@ -493,10 +498,13 @@ class DCGAN:
     Z = np.random.uniform(-1, 1, size=(n, self.latent_dims))
     samples = self.sess.run(self.sample_images_test, feed_dict={self.Z: Z, self.batch_sz: n})
     return samples
+  
+  def close(self):
+    self.sess.close()
 
 
 def pokemon():
-  util.sort_pokemon('All')
+  util.filter_pokemon('All')
   X = util.get_pokemon()
   # just loads a list of filenames, we will load them in dynamically
   # because there are many
@@ -526,11 +534,10 @@ def pokemon():
     'dense_layers': [],
     'output_activation': tf.tanh,
   }
-
   # setup gan
   # note: assume square images, so only need 1 dim
-  gan = DCGAN(dim, colors, d_sizes, g_sizes)
-  gan.fit(X)
+  gan = DCGAN(X, dim, colors, d_sizes, g_sizes)
+  gan.fit()
 
 
 if __name__ == '__main__':
