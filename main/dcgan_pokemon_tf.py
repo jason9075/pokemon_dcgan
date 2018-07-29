@@ -485,7 +485,6 @@ class DCGAN:
             flat_image,
           )
           
-    coord.join(threads)
 
     # save a plot of the costs
     plt.clf()
@@ -493,6 +492,7 @@ class DCGAN:
     plt.plot(g_costs, label='generator cost')
     plt.legend()
     plt.savefig('cost_vs_iteration.png')
+    coord.join(threads)
 
   def sample(self, n):
     Z = np.random.uniform(-1, 1, size=(n, self.latent_dims))
